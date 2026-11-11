@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1d8fe0"><link rel="manifest" href="manifest.json"><link rel="icon" href="icon.png">
+<title>قارئ عدادات المفاليس</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--b:#0b3a82;--g:#f2c230;--l:#1a7f37;--bg:#f2f7fc}
+*{box-sizing:border-box}body{margin:0;font:16px Tahoma,"Noto Naskh Arabic",sans-serif;background:var(--bg);color:#12233d}
+header{background:var(--b);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;border-bottom:4px solid var(--g)}
+header img{height:38px;background:#fff;border-radius:6px}header b{font-size:17px}
+main{padding:12px;max-width:720px;margin:auto}
+section{background:#fff;border-radius:10px;padding:12px;margin-bottom:12px;border:1px solid #cfdcec}
+input,select,button{width:100%;padding:10px;margin:4px 0;font:inherit;border:1px solid #9db4d1;border-radius:8px;background:#fff}
+button{background:var(--b);color:#fff;border:0}.s{background:var(--l)}.d{background:#c0392b}
+.row{display:flex;gap:6px}.row>*{flex:1}.it{padding:10px 0;border-bottom:1px solid #e3ebf5}.it.ok{background:#eaf6ee}
+.m{color:#5b6f8a;font-size:13px}.k{font-weight:bold;color:var(--b)}.bar{height:8px;background:#dbe8f7;border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--l)}
+</style></head><body>
+<header><img src="logo.png" alt=""><b>قارئ عدادات المفاليس</b></header>
+<main id="v"></main>
+<script>
+const $=s=>document.querySelector(s),e=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let D,idb,vf='',q='',st=0;const today=()=>new Date().toISOString().slice(0,10);
+const open=()=>new Promise(r=>{const o=indexedDB.open('qd',1);o.onupgradeneeded=()=>o.result.createObjectStore('k');o.onsuccess=()=>{idb=o.result;const g=idb.transaction('k').objectStore('k').get('d');g.onsuccess=()=>{D=g.result||{subs:[],rd:{},col:''};r()}}});
+const save=()=>idb.transaction('k','readwrite').objectStore('k').put(D,'d');
+function draw(){const vs=[...new Set(D.subs.map(x=>x.village))],l=D.subs.filter(x=>(!vf||x.village==vf)&&[x.no,x.name,x.meter].join(' ').includes(q)),done=Object.keys(D.rd).length;
+ $('#v').innerHTML=`<section><div class=k>تم تسجيل ${done} من ${D.subs.length} مشترك</div><div class=bar><i style="width:${D.subs.length?done*100/D.subs.length:0}%"></i></div>
+ <div class=row><select onchange="vf=this.value;draw()"><option value="">كل القرى</option>${vs.map(v=>`<option ${v==vf?'selected':''}>${e(v)}</option>`).join('')}</select><input id=q placeholder="بحث بالاسم أو الرقم أو العداد" value="${e(q)}" oninput="q=this.value;draw(1)"></div>
+ ${D.subs.length?'':'<div class=m>ابدأ باستيراد ملف المشتركين من تطبيق المحاسب (من الإعدادات بالأسفل).</div>'}</section>
+ ${l.slice(0,60).map(x=>{const r=D.rd[x.no]||{};return `<div class="it ${r.date?'ok':''}"><div><b>${e(x.name)}</b> <span class=m>#${e(x.no)} · عداد ${e(x.meter||'—')} · السابقة <b>${e(x.prev)}</b></span></div>
+ <div class=row><input id="c${e(x.no)}" type=number inputmode=numeric placeholder="القراءة الحالية" value="${r.cur??''}"><input id="a${e(x.no)}" type=number inputmode=numeric placeholder="المبلغ المستلم (اختياري)" value="${r.amt??''}"><button class=s style="max-width:80px" onclick="sv('${e(x.no)}')">${r.date?'✓':'حفظ'}</button></div></div>`}).join('')}
+ ${l.length>60?`<div class=m>يظهر 60 من ${l.length}. اختر قرية أو ابحث لتقليل القائمة.</div>`:''}
+ <section><h3 style="margin:0">الإعدادات والإرسال</h3><input id=col placeholder="اسم القارئ / المحصل" value="${e(D.col)}" onchange="D.col=this.value;save()">
+ <div class=m>استيراد ملف المشتركين (Excel من تطبيق المحاسب)</div><input type=file accept=.xlsx,.xls onchange="imp(this.files[0])">
+ <button class=s onclick="exp()">إرسال القراءات إلى المحاسب (Excel)</button><button class=d onclick="clr()">بدء شهر جديد (مسح القراءات)</button></section>`;
+ if(st)scrollTo(0,st);if(arguments[0]){const n=$('#q');n.focus();n.setSelectionRange(q.length,q.length)}}
+function sv(no){const x=D.subs.find(s=>s.no==no),c=$('#c'+no).value,a=$('#a'+no).value;if(c===''&&a==='')return alert('أدخل القراءة أو المبلغ');
+ if(c!==''&&+c<+x.prev&&!confirm(x.name+': القراءة ('+c+') أقل من السابقة ('+x.prev+'). هل هي صحيحة؟'))return;
+ D.rd[no]={cur:c===''?null:+c,amt:a===''?null:+a,date:today()};save();st=scrollY;draw();st=0}
+async function imp(f){if(!f)return;if(!window.XLSX)return alert('مكتبة Excel غير محمّلة. افتح التطبيق مرة واحدة مع الإنترنت.');
+ const wb=XLSX.read(await f.arrayBuffer()),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+ if(!confirm('استيراد '+rows.length+' مشترك؟ ستُستبدل القائمة الحالية (القراءات المسجلة تبقى).'))return;
+ D.subs=rows.filter(x=>x['رقم الاشتراك']!==undefined).map(x=>({no:String(x['رقم الاشتراك']).trim(),name:String(x['الاسم']??''),village:String(x['القرية']??'—'),meter:String(x['رقم العداد']??''),prev:x['القراءة السابقة']??0}));save();draw()}
+async function exp(){if(!window.XLSX)return alert('مكتبة Excel غير محمّلة.');const k=Object.entries(D.rd);if(!k.length)return alert('لا توجد قراءات');
+ const nm=n=>(D.subs.find(s=>s.no==n)||{}).name||'',rows=[['رقم الاشتراك','القراءة','المبلغ','المحصل','التاريخ','الاسم'],...k.map(([n,r])=>[n,r.cur??'',r.amt??'',D.col,r.date,nm(n)])];
+ const wb=XLSX.utils.book_new();wb.Workbook={Views:[{RTL:true}]};XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'قراءات');
+ const fn='readings-'+today()+'.xlsx',file=new File([XLSX.write(wb,{type:'array',bookType:'xlsx'})],fn,{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+ if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:'قراءات العدادات'});return}catch(_){}}
+ const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=fn;a.click()}
+function clr(){if(confirm('هل أرسلت الملف للمحاسب وتأكدت من وصوله؟ سيتم مسح كل القراءات.')){D.rd={};save();draw()}}
+open().then(()=>{navigator.storage?.persist?.();if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');draw()});
+</script></body></html>
